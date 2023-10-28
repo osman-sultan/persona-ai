@@ -1,5 +1,5 @@
 import prismadb from "@/lib/prismadb";
-import { auth } from "@clerk/nextjs";
+import { auth, redirectToSignIn } from "@clerk/nextjs";
 import PersonaForm from "./components/persona-form";
 
 interface PersonaIdPageProps {
@@ -12,6 +12,10 @@ const PersonaIdPage = async ({ params }: PersonaIdPageProps) => {
   // TODO: Check subscription
 
   const { userId } = auth();
+
+  if (!userId) {
+    return redirectToSignIn();
+  }
 
   const persona = await prismadb.persona.findUnique({
     where: {

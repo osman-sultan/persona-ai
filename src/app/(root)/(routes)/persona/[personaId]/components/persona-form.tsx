@@ -1,5 +1,4 @@
 "use client";
-
 import { ImageUpload } from "@/components/image-upload";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,10 +19,13 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Category, Persona } from "@prisma/client";
 import { SelectValue } from "@radix-ui/react-select";
+import axios from "axios";
 import { Wand2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 
@@ -74,6 +76,9 @@ const formSchema = z.object({
 });
 
 const PersonaForm = ({ categories, initialData }: PersonaFormProps) => {
+  const router = useRouter();
+  const { toast } = useToast();
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData || {
@@ -89,7 +94,35 @@ const PersonaForm = ({ categories, initialData }: PersonaFormProps) => {
   const isLoading = form.formState.isSubmitting;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    console.log(values);
+    try {
+      if (initialData) {
+        // Update Persona functionality
+        await axios.patch(`/api/persona/${initialData.id}`, values);
+
+        toast({
+          title: "Success",
+          description: "Your Persona has been updated!",
+        });
+      } else {
+        // Create Persona functionality
+        await axios.post("/api/persona", values);
+
+        toast({
+          title: "Success",
+          description: "Your Persona has been created!",
+        });
+      }
+
+      router.refresh();
+      router.push("/");
+    } catch (error) {
+      console.log(error);
+      toast({
+        title: "Error",
+        description: "Something went wrong.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
