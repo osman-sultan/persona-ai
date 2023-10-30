@@ -27,7 +27,7 @@ export async function POST(req: Request, res: Response) {
 
     // TODO: Check for subscription
 
-    const companion = await prismadb.persona.create({
+    const persona = await prismadb.persona.create({
       data: {
         categoryId,
         userId: user.id,
@@ -41,11 +41,11 @@ export async function POST(req: Request, res: Response) {
     });
 
     return new NextResponse(
-      JSON.stringify({ message: "Persona Successfully Created!", companion }),
+      JSON.stringify({ message: "Persona Successfully Created!", persona }),
       { status: 201 }
     );
   } catch (error) {
-    console.log("[COMPANION__POST]", error);
+    console.log("[PERSONA__POST]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
