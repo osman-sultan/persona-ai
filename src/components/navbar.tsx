@@ -29,7 +29,7 @@ export const Navbar = ({ isPro }: NavbarProps) => {
         items-center py-2 px-4 border-b border-primary/10 bg-secondary h-16"
     >
       <div className="flex items-center">
-        <MobileSidebar />
+        <MobileSidebar isPro={isPro} />
         <Link href="/">
           <h1
             className={cn(
