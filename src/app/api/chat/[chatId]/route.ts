@@ -12,9 +12,6 @@ import { OpenAI } from "langchain/llms/openai";
 import { Replicate } from "langchain/llms/replicate";
 import { PromptTemplate } from "langchain/prompts";
 
-import dotenv from "dotenv";
-dotenv.config({ path: `.env` });
-
 export const runtime = "edge";
 
 export async function POST(
