@@ -15,6 +15,8 @@ import { PromptTemplate } from "langchain/prompts";
 import dotenv from "dotenv";
 dotenv.config({ path: `.env` });
 
+export const runtime = "edge";
+
 export async function POST(
   request: Request,
   { params }: { params: { chatId: string } }
