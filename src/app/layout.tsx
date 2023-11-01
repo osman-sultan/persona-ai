@@ -1,3 +1,4 @@
+import { ProModal } from "@/components/pro-modal";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -33,6 +34,7 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
+            <ProModal />
             {children}
             <Toaster />
           </ThemeProvider>

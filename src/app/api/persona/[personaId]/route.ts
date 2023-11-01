@@ -1,4 +1,5 @@
 import prismadb from "@/lib/prismadb";
+import { checkSubscription } from "@/lib/subscription";
 import { auth, currentUser } from "@clerk/nextjs";
 import { NextResponse } from "next/server";
 
@@ -34,7 +35,11 @@ export async function PATCH(
       });
     }
 
-    // TODO: Check for subscription
+    const isPro = await checkSubscription();
+
+    if (!isPro) {
+      return new NextResponse("Pro Subscription required", { status: 403 });
+    }
 
     const persona = await prismadb.persona.update({
       where: {
