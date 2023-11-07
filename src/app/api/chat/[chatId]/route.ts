@@ -5,14 +5,16 @@ import prismadb from "@/lib/prismadb";
 import { rateLimit } from "@/lib/rate-limit";
 import { currentUser } from "@clerk/nextjs";
 
-import { LangChainStream, StreamingTextResponse } from "ai";
-import { CallbackManager } from "langchain/callbacks";
-import { LLMChain } from "langchain/chains";
-import { OpenAI } from "langchain/llms/openai";
-import { Replicate } from "langchain/llms/replicate";
+import { ReplicateStream, StreamingTextResponse } from "ai";
 import { PromptTemplate } from "langchain/prompts";
+import Replicate from "replicate";
 
 export const runtime = "edge";
+
+// Create a Replicate API client (that's edge friendly!)
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN || "",
+});
 
 export async function POST(
   request: Request,
@@ -59,7 +61,7 @@ export async function POST(
     const personaKey = {
       personaName: name,
       userId: user.id,
-      modelName: "llama2-13b",
+      modelName: "llama2-70b-chat",
     };
 
     const memoryManager = await MemoryManager.getInstance();
@@ -83,33 +85,14 @@ export async function POST(
       persona_file_name
     );
 
+    console.log(similarDocs);
+
     let relevantHistory = "";
     if (!!similarDocs && similarDocs.length === 0) {
       relevantHistory = similarDocs.map(doc => doc.pageContent).join("\n");
     }
 
     console.log("RELEVANT HISTORY: ", relevantHistory);
-
-    const { handlers } = LangChainStream();
-
-    // Call Replicate for inference
-    const model = new Replicate({
-      model:
-        "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3",
-      input: {
-        max_length: 2048,
-      },
-      apiKey: process.env.REPLICATE_API_TOKEN,
-      callbackManager: CallbackManager.fromHandlers(handlers),
-    });
-
-    // const model = new OpenAI({
-    //   modelName: "gpt-3.5-turbo-16k",
-    //   openAIApiKey: process.env.OPENAI_API_KEY,
-    //   callbackManager: CallbackManager.fromHandlers(handlers),
-    // });
-
-    model.verbose = true;
 
     const chainPrompt = PromptTemplate.fromTemplate(
       `
@@ -127,52 +110,51 @@ export async function POST(
       `
     );
 
-    const chain = new LLMChain({
-      llm: model,
-      prompt: chainPrompt,
+    console.log("chainPrompt: ", chainPrompt.template);
+
+    const response = await replicate.predictions.create({
+      // You must enable streaming.
+      stream: true,
+      // The model must support streaming. See https://replicate.com/docs/streaming
+      // This is the model ID for Llama 2 70b Chat
+      version:
+        "2c1608e18606fad2812020dc541930f2d0495ce32eee50074220b87300bc16e1",
+      // Format the message list into the format expected by Llama 2
+      // @see https://github.com/vercel/ai/blob/99cf16edf0a09405d15d3867f997c96a8da869c6/packages/core/prompts/huggingface.ts#L53C1-L78C2
+      input: {
+        prompt: chainPrompt.template,
+      },
     });
 
-    const initial_res = await chain
-      .call({
-        relevantHistory,
-        recentChatHistory: recentChatHistory,
-      })
-      .catch(console.error);
+    // Convert the response into a friendly text-stream
+    const stream = await ReplicateStream(response, {
+      onCompletion: async (res: string) => {
+        memoryManager.writeToHistory("" + res.trim(), personaKey);
 
-    const res = initial_res!.text;
+        // upsert it into the pinecone db
+        const current_history = `${res.trim()}`;
+        await memoryManager.UpsertChatHistory(
+          recentChatHistory + "\n" + current_history,
+          persona_file_name
+        );
 
-    var Readable = require("stream").Readable;
-    let s = new Readable();
-    s.push(res);
-    s.push(null);
-
-    if (res !== undefined && res.length > 1) {
-      memoryManager.writeToHistory("" + res.trim(), personaKey);
-
-      // upsert it into the pinecone db
-      const current_history = `${res.trim()}`;
-      await memoryManager.UpsertChatHistory(
-        recentChatHistory + "\n" + current_history,
-        persona_file_name
-      );
-
-      await prismadb.persona.update({
-        where: {
-          id: params.chatId,
-        },
-        data: {
-          messages: {
-            create: {
-              content: res,
-              role: "system",
-              userId: user.id,
+        await prismadb.persona.update({
+          where: {
+            id: params.chatId,
+          },
+          data: {
+            messages: {
+              create: {
+                content: res,
+                role: "system",
+                userId: user.id,
+              },
             },
           },
-        },
-      });
-    }
-
-    return new StreamingTextResponse(s);
+        });
+      },
+    });
+    return new StreamingTextResponse(stream);
   } catch (error) {
     console.log("[CHAT_POST]", error);
     return new NextResponse("Internal Server Error", { status: 500 });
